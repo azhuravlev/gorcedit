@@ -1,0 +1,89 @@
+name: Build and release binaries
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    strategy:
+      matrix:
+        os: [linux, macOS, windows]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "stable"
+
+      - name: Build [macOS]
+        if: matrix.os == 'macOS'
+        run: |
+          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=$(git describe --tags)'" -trimpath -o $bin ./...
+          zip -9q $bin-$os-amd64.zip $bin LICENSE
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X 'main.Version=$(git describe --tags)'" -trimpath -o $bin ./...
+          zip -9q $bin-$os-arm64.zip $bin LICENSE
+          rm $bin
+          printf "sha256: %s\n" "$(shasum -a 256 $bin-$os-amd64.zip)"
+          printf "sha256: %s\n" "$(shasum -a 256 $bin-$os-arm64.zip)"
+        env:
+          bin: "gorcedit"
+          os: ${{ matrix.os }}
+
+      - name: Build [windows]
+        if: matrix.os == 'windows'
+        run: |
+          CGO_ENABLED=0 GOOS=$os GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=$(git describe --tags)'" -trimpath -o $bin.exe ./...
+          zip -9q $bin-$os-amd64.zip $bin.exe LICENSE
+          rm $bin.exe
+          printf "sha256: %s\n" "$(shasum -a 256 $bin-$os-amd64.zip)"
+        env:
+          bin: "gorcedit"
+          os: ${{ matrix.os }}
+
+      - name: Build [linux]
+        if: matrix.os == 'linux'
+        run: |
+          CGO_ENABLED=0 GOOS=$os GOARCH=amd64 go build -ldflags="-s -w -X 'main.Version=$(git describe --tags)'" -trimpath -o $bin ./...
+          tar -I 'gzip -9' -cf $bin-$os-amd64.tar.gz $bin LICENSE
+          rm $bin
+          printf "sha256: %s\n" "$(shasum -a 256 $bin-$os-amd64.tar.gz)"
+        env:
+          bin: "gorcedit"
+          os: ${{ matrix.os }}
+
+      - name: Upload Release Assets [macOS]
+        uses: softprops/action-gh-release@v2
+        if: matrix.os == 'macOS'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: |
+            gorcedit-${{ matrix.os }}-amd64.zip
+            gorcedit-${{ matrix.os }}-arm64.zip
+
+      - name: Upload Release Assets [windows]
+        uses: softprops/action-gh-release@v2
+        if: matrix.os == 'windows'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: gorcedit-${{ matrix.os }}-amd64.zip
+
+      - name: Upload Release Assets [linux]
+        uses: softprops/action-gh-release@v2
+        if: matrix.os == 'linux'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: gorcedit-${{ matrix.os }}-amd64.tar.gz
