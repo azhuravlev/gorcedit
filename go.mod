@@ -2,6 +2,9 @@ module github.com/azhuravlev/gorcedit
 
 go 1.24.4
 
+// wrond modules path was pushed
+retract v0.0.1
+
 require (
 	github.com/alexflint/go-arg v1.6.0
 	github.com/rs/zerolog v1.34.0
